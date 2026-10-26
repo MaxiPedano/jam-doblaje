@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { access, active, allowed, currentVideo, profile, refreshClock, storageWarning, teamMode, timeLeft } from './store'
+import { access, active, allowed, authError, currentVideo, profile, refreshClock, storageWarning, teamMode, timeLeft } from './store'
 import { minimumPlan, plans, providers } from './domain'
+import { supabaseConfigured } from './lib/supabase'
 const player = ref<HTMLElement>()
 const route = useRoute()
 const fullscreenError = ref('')
@@ -43,7 +44,8 @@ async function fullscreen() {
       </nav>
     </header>
     <main class="shell">
-      <p v-if="storageWarning" class="notice" role="alert">{{ storageWarning }}</p>
+       <p v-if="storageWarning" class="notice" role="alert">{{ storageWarning }}</p>
+       <p v-if="authError" class="notice" role="alert">{{ authError }}</p>
       <div v-if="route.path !== '/studio'" class="session-strip"><span><i :class="{ live: active }"></i>{{ active && access ? 'Suscripción ' + plans[access.plan].nombre + ' activa' : access ? 'Suscripción vencida' : 'Suscribite para ver los doblajes.' }}</span><RouterLink to="/acceso">{{ active ? clock + ' restantes' : 'Ver planes →' }}</RouterLink></div>
       <RouterView />
       <section v-if="currentVideo && route.path !== '/studio'" ref="player" class="player panel" aria-label="Reproductor">
@@ -61,6 +63,6 @@ async function fullscreen() {
         <p v-if="fullscreenError" role="status">{{ fullscreenError }}</p>
       </section>
     </main>
-    <footer class="shell"><span>{{ route.path === '/studio' ? 'Studio · En desarrollo: procesamiento local de IA.' : 'Catálogo · Google Drive activo; otros proveedores en desarrollo.' }}</span><button v-if="route.path !== '/studio'" @click="teamMode = !teamMode">{{ teamMode ? 'Volver a vista suscriptor' : 'Simular vista del equipo' }}</button><span v-if="teamMode && route.path !== '/studio'">Vista de prueba local.</span></footer>
+    <footer class="shell"><span>{{ route.path === '/studio' ? 'Studio · En desarrollo: procesamiento local de IA.' : 'Catálogo · Google Drive activo; otros proveedores en desarrollo.' }}</span><button v-if="route.path !== '/studio' && !supabaseConfigured" @click="teamMode = !teamMode">{{ teamMode ? 'Volver a vista suscriptor' : 'Simular vista del equipo' }}</button><span v-if="teamMode && route.path !== '/studio'">Vista de prueba local.</span></footer>
   </div>
 </template>

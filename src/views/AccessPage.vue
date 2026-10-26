@@ -7,9 +7,11 @@ const form = reactive({ email: '', password: '', username: '' })
 const register = ref(false)
 const message = ref('')
 const busy = ref(false)
-function purchase(plan: Plan) {
+async function purchase(plan: Plan) {
   if (access.value && active.value && !confirm('¿Reemplazar tu suscripción demo? El nuevo plan comienza ahora por un mes, sin prorrateo ni cobros.')) return
-  buy(plan)
+  message.value = ''; busy.value = true
+  if (await buy(plan)) message.value = 'Plan demo guardado. No hay cobros reales.'
+  busy.value = false
 }
 function expire() { if (access.value) { refreshClock(); access.value = { ...access.value, expiresAt: now.value - 1 } } }
 function reset() { if (confirm('¿Reiniciar la suscripción demo? Tu catálogo, favoritos y cola se conservarán.')) access.value = null }
@@ -40,19 +42,21 @@ async function submitAuth() {
     </template>
   </section>
   <p v-else class="notice">Supabase todavía no está configurado. La cuenta y las suscripciones funcionan en modo demo local.</p>
+  <p v-if="authError" class="notice" role="alert">{{ authError }}</p>
   <p class="notice">No hay reproducción gratuita. Los planes son acumulativos y tienen una cuota mensual fija, sin cargos por reproducción. Los precios aún están a definir: estas activaciones son simuladas.</p>
   <div class="plans subscription-plans">
     <article v-for="(plan, key) in plans" :key="key" class="panel" :class="{ 'current-plan': active && access?.plan === key }">
       <span class="badge">{{ key === 'premium' ? 'TODO EL CATÁLOGO' : key === 'estandar' ? 'MÁS DOBLAJES' : 'TU PRIMERA SELECCIÓN' }}</span>
       <h2>{{ plan.nombre }}</h2><p class="plan-number">A definir <small>/ mes</small></p><p>{{ plan.descripcion }}</p>
       <p class="muted">Un mes calendario desde la activación. Sin renovación automática en la demo.</p>
-      <button class="primary" @click="purchase(key)">{{ active && access?.plan === key ? 'Renovar demo' : 'Simular suscripción' }} {{ plan.nombre }}</button>
+       <button class="primary" :disabled="busy || authLoading || (supabaseConfigured && !user)" @click="purchase(key)">{{ active && access?.plan === key ? 'Renovar demo' : 'Simular suscripción' }} {{ plan.nombre }}</button>
     </article>
   </div>
   <section class="panel"><h2>Tu suscripción</h2>
     <template v-if="access"><p>Plan: <b>{{ plans[access.plan].nombre }}</b> · {{ active ? 'Activo' : 'Vencido' }}</p><p>{{ active ? 'Vence' : 'Venció' }}: <b>{{ new Date(access.expiresAt).toLocaleString('es-AR') }}</b></p><p v-if="!active" role="status">Tu suscripción venció. El reproductor se desmontó. Elegí un plan para renovar la demo.</p><RouterLink v-else class="button primary" to="/">Explorar mis doblajes disponibles</RouterLink></template>
     <p v-else>No tenés una suscripción activa. Elegí un plan para probar el acceso.</p>
-    <div class="actions controls"><button :disabled="!access" @click="expire">Simular vencimiento</button><button @click="reset">Reiniciar demo</button></div>
+     <div v-if="!supabaseConfigured" class="actions controls"><button :disabled="!access" @click="expire">Simular vencimiento</button><button @click="reset">Reiniciar demo</button></div>
+     <p v-else class="muted">El plan demo se guarda en Supabase y el servidor calcula el vencimiento. No hay cobros reales.</p>
   </section>
   <section class="panel"><h2>¿Cómo se asignan los videos?</h2><p>El equipo carga el doblaje terminado y define su popularidad: baja → Básico, media → Estándar, alta → Premium. Estándar también incluye Básico; Premium incluye todos. La popularidad es editorial, no un contador automático de reproducciones.</p><p>Compartir un enlace no habilita el video: el destinatario necesita una suscripción activa que lo incluya.</p></section>
   <p class="notice">Google Drive funciona como proveedor activo. El archivo debe tener permisos de visualización en Drive; para proteger completamente el contenido y generar enlaces temporales migraremos luego a Cloudflare Stream. HTML5 y el procesamiento IA permanecen en desarrollo.</p>

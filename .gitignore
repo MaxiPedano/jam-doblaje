@@ -35,5 +35,4 @@ __pycache__/
 *.pth
 backend/data/
 
-.vercel
-.env*
+.vercel/
