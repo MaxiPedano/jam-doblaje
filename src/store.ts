@@ -92,6 +92,7 @@ export async function activateDemoSubscription(plan: Plan): Promise<boolean> {
     return false
   }
   access.value = { plan: row.plan as Plan, expiresAt: new Date(row.expires_at).getTime() }
+  authError.value = ''
   return true
 }
 
@@ -101,27 +102,39 @@ export function buy(plan: Plan) { return activateDemoSubscription(plan) }
 export async function toggleFavorite(id: string): Promise<boolean> {
   const exists = favorites.value.includes(id)
   const next = exists ? favorites.value.filter(item => item !== id) : [...favorites.value, id]
-  if (!supabase || !user.value) {
+  if (supabaseConfigured && !user.value) {
+    authError.value = 'Iniciá sesión para guardar favoritos.'
+    return false
+  }
+  if (!supabase) {
     favorites.value = next
     return true
   }
+  const currentUser = user.value
+  if (!currentUser) { authError.value = 'Iniciá sesión para guardar favoritos.'; return false }
   const result = exists
-    ? await supabase.from('favorites').delete().eq('user_id', user.value.id).eq('video_id', id)
-    : await supabase.from('favorites').insert({ user_id: user.value.id, video_id: id })
+    ? await supabase.from('favorites').delete().eq('user_id', currentUser.id).eq('video_id', id)
+    : await supabase.from('favorites').insert({ user_id: currentUser.id, video_id: id })
   if (result.error) { setError('No se pudo actualizar favoritos', result.error); return false }
   favorites.value = next
+  authError.value = ''
   return true
 }
 
 export async function setWatchlist(next: string[]): Promise<boolean> {
   const normalized = [...new Set(next)].filter(id => catalog.value.some(video => video.id === id))
-  if (!supabase || !user.value) {
+  if (supabaseConfigured && !user.value) {
+    authError.value = 'Iniciá sesión para guardar tu lista.'
+    return false
+  }
+  if (!supabase) {
     queue.value = normalized
     return true
   }
   const { error } = await supabase.rpc('set_watchlist', { video_ids: normalized })
   if (error) { setError('No se pudo guardar la lista', error); return false }
   queue.value = normalized
+  authError.value = ''
   return true
 }
 
@@ -158,6 +171,7 @@ export async function saveVideo(video: Video): Promise<boolean> {
   })
   if (error) { setError('No se pudo guardar el doblaje', error); return false }
   replaceLocalVideo(video)
+  authError.value = ''
   return true
 }
 
@@ -173,6 +187,9 @@ export async function removeVideo(id: string): Promise<boolean> {
   const { error } = await supabase.from('videos').delete().eq('id', id)
   if (error) { setError('No se pudo eliminar el doblaje', error); return false }
   catalog.value = catalog.value.filter(item => item.id !== id)
+  favorites.value = favorites.value.filter(item => item !== id)
+  queue.value = queue.value.filter(item => item !== id)
+  authError.value = ''
   return true
 }
 
