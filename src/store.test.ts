@@ -1,0 +1,41 @@
+import { beforeEach, expect, it, vi } from 'vitest'
+const data = new Map<string, string>()
+beforeEach(() => {
+  vi.resetModules(); data.clear()
+  vi.stubGlobal('localStorage', { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => data.set(k, v) })
+})
+it('agrega, edita, persiste y elimina escenas limpiando favoritos y cola', async () => {
+  const store = await import('./store')
+  const song = { id: 'test', titulo: 'Escena ficticia', pelicula: 'Película de prueba', genero: 'Drama', popularidad: 'alta' as const, proveedor: 'google-drive' as const, fuente: 'ID_FICTICIO_12345' }
+  store.saveVideo(song); store.toggleFavorite(song.id); store.enqueue(song.id); store.enqueue(song.id)
+  expect(store.queue.value).toEqual(['test'])
+  store.saveVideo({ ...song, titulo: 'Editado' })
+  expect(store.catalog.value).toHaveLength(1)
+  expect(JSON.parse(data.get('karaoke.catalog')!).videos[0].titulo).toBe('Editado')
+  vi.resetModules()
+  const reloaded = await import('./store')
+  expect(reloaded.catalog.value[0].titulo).toBe('Editado')
+  expect(reloaded.favorites.value).toEqual(['test'])
+  reloaded.selected.value = 'test'; reloaded.replaceCatalog([])
+  expect(reloaded.favorites.value).toEqual([])
+  expect(reloaded.queue.value).toEqual([])
+  expect(reloaded.currentVideo.value).toBeUndefined()
+})
+it('actualiza permisos al cambiar de plan, editar popularidad o vencer, y persiste', async () => {
+  const s = await import('./store')
+  s.saveVideo({ id: 'test', titulo: 'Prueba', pelicula: 'Ficción', genero: 'Drama', popularidad: 'alta', proveedor: 'google-drive', fuente: 'ID_FICTICIO_12345' })
+  s.selected.value = 'test'
+  expect(s.allowed.value).toBe(false)
+  s.buy('basico'); expect(s.allowed.value).toBe(false)
+  s.buy('premium'); expect(s.allowed.value).toBe(true)
+  s.buy('estandar'); expect(s.allowed.value).toBe(false)
+  s.saveVideo({ ...s.currentVideo.value!, popularidad: 'media' }); expect(s.allowed.value).toBe(true)
+  s.now.value = s.access.value!.expiresAt; expect(s.allowed.value).toBe(false)
+  expect(JSON.parse(data.get('karaoke.access')!).expiresAt).toBe(s.access.value?.expiresAt)
+})
+it('recupera el catálogo inicial ante datos corruptos y avisa', async () => {
+  data.set('karaoke.catalog', '{no es json')
+  const s = await import('./store')
+  expect(s.catalog.value).toEqual([])
+  expect(s.storageWarning.value).not.toBe('')
+})
